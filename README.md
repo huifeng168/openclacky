@@ -18,7 +18,7 @@ Same task, how much do you pay? Under comparable agent workloads, OpenClacky sav
 
 | Agent | Relative cost | Notes |
 |---|---|---|
-| **OpenClacky** | **~0.8–1.2×** | 16 tools · ~100% cache hit · subagent routing |
+| **OpenClacky** | **~0.8** | 16 tools · ~100% cache hit · subagent routing |
 | Claude Code | 1.0× (baseline) | World-class harness, closed-source subscription |
 | OpenClaw | ~1.5× | Comparable harness agent |
 | Hermes | ~3× | 52 built-in tools — schema bloat ~3–4× |
@@ -31,11 +31,11 @@ Core agent capability is roughly on par across the field — the real differenti
 
 | Feature | Claude Code | OpenClaw | Hermes | **OpenClacky** |
 |---|:---:|:---:|:---:|:---:|
-| Token cost | 1.0× | ~1.5× | ~3× | **~0.8–1.2×** |
+| Token cost | 1.0× | ~1.5× | ~3× | **~0.8** |
 | Open source | ❌ Closed | ✅ Open | ✅ Open | ✅ MIT |
 | BYOK / model freedom | ❌ Anthropic only | ✅ | ✅ | ✅ |
 | Skill self-evolution | ❌ | ❌ | ✅ | ✅ |
-| IM integration (Feishu / WeCom / WeChat) | ❌ | ✅ | ✅ | ✅ |
+| IM integration (Feishu/WeCom/WeChat/Discord/Telegram) | ❌ | ✅ | ✅ | ✅ |
 
 ## How we get the cost down
 
@@ -80,17 +80,28 @@ More options: https://www.openclacky.com/
 
 ### Command line
 
+One-line install(Mac/Ubuntu):
+
+```bash
+/bin/bash -c "$(curl -sSL https://raw.githubusercontent.com/clacky-ai/openclacky/main/scripts/install.sh)"
+```
+
+Windows:
+
+```bash
+powershell -c "& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/clacky-ai/openclacky/main/scripts/install.ps1')))"
+```
+
+or using Ruby(3.x/4.x):
+
 **Requirements:** Ruby >= 3.1.0
 
 ```bash
 gem install openclacky
 ```
 
-Or one-line install:
+see more: https://www.openclacky.com/docs/installation
 
-```bash
-/bin/bash -c "$(curl -sSL https://raw.githubusercontent.com/clacky-ai/openclacky/main/scripts/install.sh)"
-```
 
 ## Quick Start
 
@@ -136,6 +147,16 @@ $ openclacky
 > Add user auth with email and password
 > How does the payment module work?
 ```
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=clacky-ai%2Fopenclacky&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=clacky-ai/openclacky&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=clacky-ai/openclacky&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=clacky-ai/openclacky&type=date&legend=top-left" />
+ </picture>
+</a>
 
 ## Advanced — Creator Program
 
