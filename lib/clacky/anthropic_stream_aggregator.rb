@@ -54,6 +54,10 @@ module Clacky
           block[:kind] = :tool_use
           block[:input_str] ||= +""
           block[:input_str] << delta["partial_json"].to_s
+        when "thinking_delta"
+          block[:kind] = :thinking
+          block[:thinking] ||= +""
+          block[:thinking] << delta["thinking"].to_s
         end
         emit_estimate_progress
       when "content_block_stop"
@@ -123,7 +127,7 @@ module Clacky
 
     private def approximate_output_tokens
       total_chars = @blocks.values.sum do |b|
-        b[:text].to_s.bytesize + b[:input_str].to_s.bytesize
+        b[:text].to_s.bytesize + b[:input_str].to_s.bytesize + b[:thinking].to_s.bytesize
       end
       (total_chars / 4.0).ceil
     end

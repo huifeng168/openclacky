@@ -71,7 +71,7 @@ module Clacky
     class ProgressHandle
       # Default tick interval (seconds). Matches the old global spinner
       # cadence. Tests may pass a smaller interval for speed.
-      DEFAULT_TICK_INTERVAL = 0.5
+      DEFAULT_TICK_INTERVAL = 0.25
 
       # Style hint for the renderer. The owner decides what colors to use;
       # the handle only forwards the hint as part of the frame metadata
@@ -92,6 +92,12 @@ module Clacky
       # didn't need a spinner in the first place; keeping the final
       # frame would be visual noise.
       FAST_FINISH_THRESHOLD_SECONDS = 2
+
+      # Show "Thinking for Ns" once the gap since the last LLM stream
+      # chunk reaches this many seconds. Bedrock often pauses 5–18s
+      # while generating large content blocks (long tool_use JSON in
+      # particular); without this hint users assume the agent is stuck.
+      IDLE_HINT_THRESHOLD_SECONDS = 2
 
       # @param owner [#register_progress, #unregister_progress, #render_frame]
       # @param message [String] Initial progress message.
@@ -122,6 +128,7 @@ module Clacky
         @ticker        = nil
         @state         = :fresh     # :fresh → :running → :closed
         @metadata      = {}
+        @last_chunk_at = nil
         @monitor       = Monitor.new
       end
 
@@ -133,9 +140,10 @@ module Clacky
         @monitor.synchronize do
           return self unless @state == :fresh
 
-          @state      = :running
-          @start_time = @clock.call
-          @entry_id   = @owner.register_progress(self)
+          @state         = :running
+          @start_time    = @clock.call
+          @last_chunk_at = @start_time
+          @entry_id      = @owner.register_progress(self)
         end
 
         # Fire one initial frame synchronously so the user sees the
@@ -156,7 +164,10 @@ module Clacky
         @monitor.synchronize do
           return if @state != :running
           @message  = message.to_s if message
-          @metadata = metadata     if metadata
+          if metadata
+            @metadata = metadata
+            @last_chunk_at = @clock.call
+          end
         end
       end
 
@@ -202,7 +213,7 @@ module Clacky
       # +render_frame+ and is responsible for writing it into the entry.
       def current_frame
         @monitor.synchronize do
-          compose_frame(@message, elapsed_seconds, @metadata)
+          compose_frame(@message, elapsed_seconds, @metadata, idle_seconds)
         end
       end
 
@@ -277,23 +288,47 @@ module Clacky
         (@clock.call - @start_time).to_i
       end
 
-      # Live-frame format: "<message>… (<elapsed>s · ↑in ↓out tokens)"
-      # Metadata like { attempt:, total: } is appended as "[i/N]" before
-      # the parenthetical so step counters stay readable.
-      private def compose_frame(message, elapsed, metadata)
+      # Seconds since the last metadata update (i.e. the last LLM stream
+      # chunk that carried token info). Used to surface "Thinking for Ns"
+      # in the live frame so users can see the agent isn't stuck even
+      # when token counts plateau during long Bedrock content blocks.
+      private def idle_seconds
+        return 0 unless @last_chunk_at
+        (@clock.call - @last_chunk_at).to_i
+      end
+
+      # Live-frame format:
+      #   "<message>… (<elapsed>s · ↓N tokens · reasoning…)"
+      # The "reasoning" tail only appears once tokens have started
+      # streaming AND the gap since the last chunk reaches the threshold
+      # — signalling the model is between tool_use blocks doing extended
+      # thinking. No seconds shown there to avoid duplicating elapsed;
+      # animated dots (1→2→3) provide the "still alive" cue.
+      private def compose_frame(message, elapsed, metadata, idle = 0)
         head = message.to_s
         if metadata && (attempt = metadata[:attempt]) && (total = metadata[:total])
           head = "#{head} [#{attempt}/#{total}]"
         end
 
+        token_part = metadata && format_token_progress(metadata)
+
         suffix_parts = []
         suffix_parts << "#{elapsed}s" if elapsed > 0
-        if metadata && (token_part = format_token_progress(metadata))
-          suffix_parts << token_part
+        suffix_parts << token_part if token_part
+        if token_part && idle >= IDLE_HINT_THRESHOLD_SECONDS
+          suffix_parts << "reasoning #{spinner_frame} "
         end
 
         return "#{head}…" if suffix_parts.empty?
         "#{head}… (#{suffix_parts.join(" · ")})"
+      end
+
+      SPINNER_FRAMES = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
+      SPINNER_INTERVAL_MS = 250
+
+      private def spinner_frame
+        ms = (@clock.call.to_f * 1000).to_i
+        SPINNER_FRAMES[(ms / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length]
       end
 
       # Render LLM streaming token counts as "↑1.2k ↓234 tokens".
@@ -301,15 +336,9 @@ module Clacky
       # prompt_tokens only arrives in the final frame), shows "↑—" so the
       # column doesn't flicker between absent / present.
       private def format_token_progress(metadata)
-        input  = metadata[:input_tokens]
         output = metadata[:output_tokens]
-        has_in  = !input.nil?  && input.to_i  > 0
-        has_out = !output.nil? && output.to_i > 0
-        return nil unless has_in || has_out
-        parts = []
-        parts << "↑#{compact_count(input.to_i)}"  if has_in
-        parts << "↓#{compact_count(output.to_i)}" if has_out
-        "#{parts.join(" ")} tokens"
+        return nil if output.nil? || output.to_i <= 0
+        "↓ #{compact_count(output.to_i)} tokens"
       end
 
       private def compact_count(n)

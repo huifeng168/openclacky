@@ -60,6 +60,10 @@ module Clacky
           block[:input_str] << tu["input"].to_s
           block[:id]   ||= tu["toolUseId"]
           block[:name] ||= tu["name"]
+        elsif (rc = delta["reasoningContent"])
+          block[:kind] = :reasoning
+          block[:reasoning] ||= +""
+          block[:reasoning] << rc["text"].to_s
         end
         emit_estimate_progress
       when "contentBlockStop"
@@ -125,7 +129,7 @@ module Clacky
 
     private def approximate_output_tokens
       total_chars = @blocks.values.sum do |b|
-        b[:text].to_s.bytesize + b[:input_str].to_s.bytesize
+        b[:text].to_s.bytesize + b[:input_str].to_s.bytesize + b[:reasoning].to_s.bytesize
       end
       (total_chars / 4.0).ceil
     end

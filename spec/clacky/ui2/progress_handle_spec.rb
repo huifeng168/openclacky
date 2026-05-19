@@ -209,13 +209,10 @@ RSpec.describe Clacky::UI2::ProgressHandle do
   # update: change message / metadata mid-flight
   # ---------------------------------------------------------------------------
   describe "#update" do
-    it "updates the message and re-renders immediately when top-of-stack" do
+    it "updates the message visible in the next composed frame" do
       h = described_class.new(owner: owner, message: "Thinking", style: :primary).start
-      owner.events.clear
       h.update(message: "Retrying (1/3)")
-      render = owner.events.find { |e| e.first == :render }
-      expect(render).not_to be_nil
-      expect(render[2]).to include("Retrying")
+      expect(h.current_frame).to include("Retrying")
       h.finish
     end
 
@@ -295,14 +292,12 @@ RSpec.describe Clacky::UI2::ProgressHandle do
   end
 
   describe "token-count metadata rendering" do
-    it "appends ↑in ↓out when input/output token counts are present" do
+    it "appends ↓N tokens when output_tokens is positive" do
       h = described_class.new(owner: owner, message: "Thinking", tick_interval: 999)
       h.start
       h.update(metadata: { input_tokens: 12, output_tokens: 7 })
 
-      render = owner.events.reverse.find { |e| e[0] == :render }
-      expect(render[2]).to include("↑12")
-      expect(render[2]).to include("↓7")
+      expect(h.current_frame).to include("↓ 7 tokens")
       h.finish
     end
 
@@ -311,9 +306,7 @@ RSpec.describe Clacky::UI2::ProgressHandle do
       h.start
       h.update(metadata: { input_tokens: 1234, output_tokens: 12_345 })
 
-      render = owner.events.reverse.find { |e| e[0] == :render }
-      expect(render[2]).to include("↑1.2k")
-      expect(render[2]).to include("↓12k")
+      expect(h.current_frame).to include("↓ 12k tokens")
       h.finish
     end
 
@@ -322,9 +315,9 @@ RSpec.describe Clacky::UI2::ProgressHandle do
       h.start
       h.update(metadata: { attempt: 2, total: 3 })
 
-      render = owner.events.reverse.find { |e| e[0] == :render }
-      expect(render[2]).to include("[2/3]")
-      expect(render[2]).not_to include("↑")
+      frame = h.current_frame
+      expect(frame).to include("[2/3]")
+      expect(frame).not_to include("↓")
       h.finish
     end
 
@@ -336,21 +329,37 @@ RSpec.describe Clacky::UI2::ProgressHandle do
       clock_value = 12.0
       h.update(metadata: { input_tokens: 0, output_tokens: 132 })
 
-      render = owner.events.reverse.find { |e| e[0] == :render }
-      expect(render[2]).to eq("Computing… (12s · ↑— ↓132 tokens)")
+      expect(h.current_frame).to eq("Computing… (12s · ↓ 132 tokens)")
       h.finish
     end
 
-    it "uses the actual input count when input_tokens is positive" do
+    it "appends a Braille spinner + 'reasoning' once the gap since last update reaches the threshold" do
       clock_value = 0.0
       clock = -> { clock_value }
       h = described_class.new(owner: owner, message: "Computing", tick_interval: 999, clock: clock)
       h.start
-      clock_value = 3.0
-      h.update(metadata: { input_tokens: 1234, output_tokens: 56 })
+      clock_value = 1.0
+      h.update(metadata: { input_tokens: 0, output_tokens: 50 })
 
-      render = owner.events.reverse.find { |e| e[0] == :render }
-      expect(render[2]).to eq("Computing… (3s · ↑1.2k ↓56 tokens)")
+      # Spinner advances every 250ms across 10 Braille frames.
+      # 5000/250=20, 20%10=0 → frame 0 (⠋).
+      clock_value = 5.000; expect(h.current_frame).to include("reasoning ⠋")
+      clock_value = 5.250; expect(h.current_frame).to include("reasoning ⠙")
+      clock_value = 5.500; expect(h.current_frame).to include("reasoning ⠹")
+
+      frame = h.current_frame
+      expect(frame).to include("↓ 50 tokens")
+      expect(frame).not_to match(/\d+s · [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/) # no second-counter inside reasoning
+      h.finish
+    end
+
+    it "omits the reasoning tail before any tokens have arrived" do
+      clock_value = 0.0
+      clock = -> { clock_value }
+      h = described_class.new(owner: owner, message: "Computing", tick_interval: 999, clock: clock)
+      h.start
+      clock_value = 30.0
+      expect(h.current_frame).not_to include("reasoning")
       h.finish
     end
   end
