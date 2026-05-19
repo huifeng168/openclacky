@@ -55,6 +55,7 @@ module Clacky
           block[:input_str] ||= +""
           block[:input_str] << delta["partial_json"].to_s
         end
+        emit_estimate_progress
       when "content_block_stop"
         # Nothing to do: blocks are finalised in to_h.
       when "message_delta"
@@ -108,6 +109,23 @@ module Clacky
       @on_chunk.call(input_tokens: input, output_tokens: output)
     rescue => e
       Clacky::Logger.warn("[AnthropicStreamAggregator] on_chunk: #{e.class}: #{e.message}")
+    end
+
+    private def emit_estimate_progress
+      return unless @on_chunk
+      output = approximate_output_tokens
+      return if output == @last_output_tokens
+      @last_output_tokens = output
+      @on_chunk.call(input_tokens: @last_input_tokens, output_tokens: output)
+    rescue => e
+      Clacky::Logger.warn("[AnthropicStreamAggregator] on_chunk: #{e.class}: #{e.message}")
+    end
+
+    private def approximate_output_tokens
+      total_chars = @blocks.values.sum do |b|
+        b[:text].to_s.bytesize + b[:input_str].to_s.bytesize
+      end
+      (total_chars / 4.0).ceil
     end
   end
 end

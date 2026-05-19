@@ -158,7 +158,6 @@ module Clacky
           @message  = message.to_s if message
           @metadata = metadata     if metadata
         end
-        render_now
       end
 
       # Stop the ticker, render one final frame, and unregister from the
@@ -304,10 +303,13 @@ module Clacky
       private def format_token_progress(metadata)
         input  = metadata[:input_tokens]
         output = metadata[:output_tokens]
-        return nil if input.nil? && output.nil?
-        in_str  = input.nil? || input.to_i <= 0 ? "—" : compact_count(input.to_i)
-        out_str = compact_count(output.to_i)
-        "↑#{in_str} ↓#{out_str} tokens"
+        has_in  = !input.nil?  && input.to_i  > 0
+        has_out = !output.nil? && output.to_i > 0
+        return nil unless has_in || has_out
+        parts = []
+        parts << "↑#{compact_count(input.to_i)}"  if has_in
+        parts << "↓#{compact_count(output.to_i)}" if has_out
+        "#{parts.join(" ")} tokens"
       end
 
       private def compact_count(n)
