@@ -22,7 +22,7 @@ module Clacky
           read: 0.50                  # $0.50/MTok cache read
         }
       },
-      
+
       "claude-sonnet-4.5" => {
         input: {
           default: 3.00,              # $3/MTok for prompts ≤ 200K tokens
@@ -39,7 +39,7 @@ module Clacky
           read_over_200k: 0.60        # $0.60/MTok cache read (> 200K)
         }
       },
-      
+
       "claude-haiku-4.5" => {
         input: {
           default: 1.00,              # $1/MTok
@@ -122,7 +122,7 @@ module Clacky
         },
         cache: {
           write: 0.14,                    # DeepSeek doesn't charge extra for writes; bill at miss rate
-          read: 0.028                     # $0.028/MTok cache hit
+          read: 0.0028                     # $0.028/MTok cache hit
         }
       },
 
@@ -137,7 +137,7 @@ module Clacky
         },
         cache: {
           write: 1.74,                    # no separate write charge; bill at miss rate
-          read: 0.145                     # $0.145/MTok cache hit
+          read: 0.0145                     # $0.145/MTok cache hit
         }
       },
 
@@ -413,7 +413,7 @@ module Clacky
 
     class << self
       # Calculate cost for the given model and usage
-      # 
+      #
       # @param model [String] Model identifier
       # @param usage [Hash] Usage statistics containing:
       #   - prompt_tokens: number of input tokens
@@ -436,24 +436,24 @@ module Clacky
         completion_tokens = usage[:completion_tokens] || 0
         cache_write_tokens = usage[:cache_creation_input_tokens] || 0
         cache_read_tokens = usage[:cache_read_input_tokens] || 0
-        
+
         # Determine if we're in the over_200k tier
         # Note: prompt_tokens includes cache_read_tokens but NOT cache_write_tokens
         # cache_write_tokens are additional tokens that were written to cache
         total_input_tokens = prompt_tokens + cache_write_tokens
         over_threshold = total_input_tokens > TIERED_PRICING_THRESHOLD
-        
+
         # Calculate regular input cost (non-cached tokens)
         # prompt_tokens already includes cache_read_tokens, so we need to subtract them
         # cache_write_tokens are not part of prompt_tokens, so they're handled separately in cache_cost
         regular_input_tokens = prompt_tokens - cache_read_tokens
         input_rate = over_threshold ? pricing[:input][:over_200k] : pricing[:input][:default]
         input_cost = (regular_input_tokens / 1_000_000.0) * input_rate
-        
+
         # Calculate output cost
         output_rate = over_threshold ? pricing[:output][:over_200k] : pricing[:output][:default]
         output_cost = (completion_tokens / 1_000_000.0) * output_rate
-        
+
         # Calculate cache costs
         cache_cost = calculate_cache_cost(
           pricing: pricing,
@@ -461,24 +461,24 @@ module Clacky
           cache_read_tokens: cache_read_tokens,
           over_threshold: over_threshold
         )
-        
+
         {
           cost: input_cost + output_cost + cache_cost,
           source: source
         }
       end
-      
+
       # Get pricing for a specific model
       # Falls back to default pricing if model not found
-      # 
+      #
       # @param model [String] Model identifier
       # @return [Hash] Pricing structure for the model
       def get_pricing(model)
         get_pricing_with_source(model)[:pricing]
       end
-      
+
       # Get pricing with source information
-      # 
+      #
       # @param model [String] Model identifier
       # @return [Hash] Hash containing:
       #   - pricing: Pricing structure or nil if model is unknown
@@ -498,18 +498,18 @@ module Clacky
           { pricing: nil, source: nil }
         end
       end
-      
-      
+
+
       # Normalize model name to match pricing table keys.
       # Returns the canonical key on match, or nil when no pricing is available.
       def normalize_model_name(model)
         return nil if model.nil? || model.empty?
-        
+
         model = model.downcase.strip
-        
+
         # Direct match
         return model if PRICING_TABLE.key?(model)
-        
+
         # Check for Claude model variations
         # Support both dot and dash separators (e.g., "4.5", "4-5", "4-6")
         # Also handles Bedrock cross-region prefixes (e.g. "jp.anthropic.claude-sonnet-4-6")
@@ -604,11 +604,11 @@ module Clacky
           nil  # No pricing available for this model — cost will show as N/A
         end
       end
-      
+
       # Calculate cache-related costs
       def calculate_cache_cost(pricing:, cache_write_tokens:, cache_read_tokens:, over_threshold:)
         cache_cost = 0.0
-        
+
         # Cache write cost
         if cache_write_tokens > 0
           write_rate = if pricing[:cache].key?(:write)
@@ -620,10 +620,10 @@ module Clacky
                        else
                          pricing[:cache][:write_default]
                        end
-          
+
           cache_cost += (cache_write_tokens / 1_000_000.0) * write_rate
         end
-        
+
         # Cache read cost
         if cache_read_tokens > 0
           read_rate = if pricing[:cache].key?(:read)
@@ -635,10 +635,10 @@ module Clacky
                       else
                         pricing[:cache][:read_default]
                       end
-          
+
           cache_cost += (cache_read_tokens / 1_000_000.0) * read_rate
         end
-        
+
         cache_cost
       end
     end
